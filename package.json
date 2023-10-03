@@ -1,0 +1,25 @@
+{
+  "name": "silly-web-framework",
+  "main": "build/src/index.js",
+  "scripts": {
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "build": "tsc",
+    "fmt": "gts fix"
+  },
+  "dependencies": {
+    "radix3": "^1.1.0",
+    "reflect-metadata": "^0.1.13",
+    "zod": "^3.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.4.6",
+    "gts": "^5.0.1",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.1",
+    "typescript": "~5.1.6"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
