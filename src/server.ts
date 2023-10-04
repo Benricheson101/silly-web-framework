@@ -46,6 +46,8 @@ export const startServer = (
             route.fnName
           ) || [];
 
+        console.log('param md', md);
+
         const args = md.map((param, i) => {
           switch (param.type) {
             case RouteParamDataType.JSON: {
@@ -64,15 +66,9 @@ export const startServer = (
               }
 
               // @ts-expect-error how do I type `typeof <extended abstract class>`?
-              const parsed: BodyParser = new Type();
-              parsed.build(body);
-
-              if (parsed.isValid()) {
-                return parsed;
-              }
-
+              const parsed: BodyParser = new Type(body);
               // TODO: how should I skip this handler fn if it's not valid?
-              return {};
+              return parsed;
             }
 
             case RouteParamDataType.Query: {

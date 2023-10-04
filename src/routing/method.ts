@@ -9,6 +9,17 @@ const addRouteMetadata = <T>(
   route: Omit<Route, 'fn' | 'group' | 'fnName'>
 ) => {
   const md: Route[] = Reflect.getMetadata(ROUTES_METADATA_KEY, target) || [];
+
+  // console.log('addRoute', Object.getOwnPropertyNames(target.constructor.prototype));
+  console.log(
+    'addRoute',
+    target.constructor,
+    Reflect.getOwnMetadataKeys(target),
+    Reflect.getOwnMetadataKeys(target.constructor),
+    Reflect.getOwnMetadataKeys(target.constructor.prototype)
+  );
+  // Reflect.defineMetadata('target.constructor', {}, target.constructor);
+
   md.push({
     ...route,
     group: target.constructor,

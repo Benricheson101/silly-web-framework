@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 
 import {z} from 'zod';
+import {autoInjectable, container, inject} from 'tsyringe';
+
 import {
   Get,
   Param,
@@ -9,76 +11,106 @@ import {
   Patch,
   Delete,
   Router,
-  ZodValidatedBodyParser,
   Query,
+  RouteGroup,
 } from './routing';
 import {startServer} from './server';
+import {ZodJSONValidatedBodyParser} from './util/zod';
 
-const USERS: Record<number, {name: string}> = {
-  0: {name: 'Ben'},
-};
+class Database {
+  #nextID = 0;
+  #users: Map<number, {id: number; name: string}> = new Map();
 
-class CreateUserBody extends ZodValidatedBodyParser {
-  name!: string;
-  password!: string;
+  createUser(data: CreateUserBody) {
+    const id = this.#nextID++;
+    this.#users.set(id, {id, name: data.name});
+    return this.#users.get(id);
+  }
 
-  constructor() {
-    super(
-      z.object({
-        name: z.string(),
-        password: z.string(),
-      })
-    );
+  getUser(id: number) {
+    return this.#users.get(id);
+  }
+
+  deleteUser(id: number) {
+    this.#users.delete(id);
+  }
+
+  updateUser(id: number, data: UpdateUserBody) {
+    const user = this.#users.get(id);
+
+    if (!user) {
+      throw new Error('User does not exist');
+    }
+
+    this.#users.set(id, {...user, ...(data.toJSON() as {name: string})});
+    return this.#users.get(id);
   }
 }
 
-class UpdatableUserFields extends ZodValidatedBodyParser {
-  name?: string;
+class CreateUserBody extends ZodJSONValidatedBodyParser({
+  name: z.string(),
+  password: z.string(),
+}) {}
 
-  constructor() {
-    super(
-      z.object({
-        name: z.string().optional(),
-      })
-    );
-  }
-}
+class UpdateUserBody extends ZodJSONValidatedBodyParser(
+  {
+    name: z.string().optional(),
+  },
+  true
+) {}
 
+const db = new Database();
+db.createUser(
+  new CreateUserBody(JSON.stringify({name: 'Ben', password: 'password'}))
+);
+
+container.register(Database, {
+  useValue: db,
+});
+
+@autoInjectable()
+@RouteGroup('/users')
 class UserRoutes {
-  @Get('/users/:id')
+  constructor(@inject(Database) private db: Database) {}
+
+  @Get('/:id')
+  // TODO: type coercion for @Param and @Query ?
   getUser(@Param('id') _id: string) {
     const id = Number(_id);
-    return USERS[id as keyof typeof USERS];
+    console.log(id);
+    return this.db.getUser(id);
   }
 
-  @Post('/users')
+  @Post('/')
   createUser(@Body userCreds: CreateUserBody) {
-    const id = Math.max(...Object.keys(USERS).map(Number)) + 1;
-    USERS[id] = {name: userCreds.name};
-    return {id, ...USERS[id]};
+    return this.db.createUser(userCreds);
   }
 
-  @Patch('/users/:id')
-  updateUser(@Body updatedUser: UpdatableUserFields, @Param('id') _id: string) {
+  @Patch('/:id')
+  updateUser(@Body updatedUser: UpdateUserBody, @Param('id') _id: string) {
     const id = Number(_id);
-    USERS[id] = {...USERS[id], ...updatedUser};
-    return USERS[id];
+    console.log(id);
+    return this.db.updateUser(id, updatedUser);
   }
 
-  @Delete('/users/:id')
+  @Delete('/:id')
   deleteUser(@Param('id') _id: string) {
     const id = Number(_id);
-    delete USERS[id];
+    this.db.deleteUser(id);
     return {};
   }
 }
 
+@autoInjectable()
+@RouteGroup('/')
 class AdminRoutes {
+  constructor(@inject(Database) private db: Database) {}
+
   @Get('/is-admin')
   // TODO: required prop in @Query
   isAdmin(@Query('id') _id: number) {
     const id = Number(_id);
-    return USERS[id]?.name === 'Ben';
+    return this.db.getUser(id)?.name === 'Ben';
   }
 }
 
