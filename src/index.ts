@@ -13,9 +13,9 @@ import {
   Router,
   Query,
   RouteGroup,
+  ZodJSONValidatedBodyParser,
 } from './routing';
 import {startServer} from './server';
-import {ZodJSONValidatedBodyParser} from './util/zod';
 
 class Database {
   #nextID = 0;
@@ -77,7 +77,6 @@ class UserRoutes {
   // TODO: type coercion for @Param and @Query ?
   getUser(@Param('id') _id: string) {
     const id = Number(_id);
-    console.log(id);
     return this.db.getUser(id);
   }
 
@@ -89,7 +88,6 @@ class UserRoutes {
   @Patch('/:id')
   updateUser(@Body updatedUser: UpdateUserBody, @Param('id') _id: string) {
     const id = Number(_id);
-    console.log(id);
     return this.db.updateUser(id, updatedUser);
   }
 
