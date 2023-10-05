@@ -19,9 +19,9 @@ import {
   RouteGroup,
   ZodJSONValidatedBodyParser,
   Header,
-} from './routing';
+  RequireHeaders,
+} from '../lib';
 import {createServer} from 'http';
-import {RequireHeaders} from './routing/constraints';
 
 type User = {id: number; name: string; isAdmin: boolean};
 
@@ -101,12 +101,10 @@ class UserRoutes {
   }
 
   @Patch('/:id')
-  updateUser(
-    @Body updatedUser: UpdateUserBody,
-    @Param('id') id: number,
-    @Header('Content-Type') contentType: string
-  ) {
-    console.log('content-type:', contentType);
+  @RequireHeaders({
+    'Content-Type': ['application/json'],
+  })
+  updateUser(@Body updatedUser: UpdateUserBody, @Param('id') id: number) {
     return this.db.updateUser(id, updatedUser);
   }
 
