@@ -1,5 +1,5 @@
 ### What?
-I've had the idea to build something like this for a while, but never did. I finally sat down and learned how decorators, and made a silly little web framework. This is not production ready, nor probably ever will be. But it's a fun PoC if nothing else.
+I've had the idea to build something like this for a while, but never did. I finally sat down and learned how decorators worked, and made a silly little web framework. This is not production ready, nor probably ever will be. But it's a fun PoC if nothing else.
 
 ### How?
 Using the [reflect-metadata](https://npm.im/reflect-metadata) API, each decorator stores metadata on the route group. The data is later accessed by the Router to properly route requests. The router uses [find-my-way](https://npm.im/find-my-way), which can be accessed from `Router#router`.
