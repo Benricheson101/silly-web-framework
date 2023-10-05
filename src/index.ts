@@ -18,7 +18,6 @@ import {
   Query,
   RouteGroup,
   ZodJSONValidatedBodyParser,
-  Header,
   RequireHeaders,
 } from '../lib';
 import {createServer} from 'http';
@@ -68,9 +67,7 @@ class CreateUserBody extends ZodJSONValidatedBodyParser({
 }) {}
 
 class UpdateUserBody extends ZodJSONValidatedBodyParser(
-  {
-    name: z.string().optional(),
-  },
+  {name: z.string().optional()},
   true
 ) {}
 

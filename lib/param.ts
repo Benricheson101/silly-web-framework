@@ -87,7 +87,7 @@ export const Body: ParameterDecorator = <T extends Object>(
 
     case type instanceof Object: {
       console.log(type, 'is auto parse (JSON)');
-      data = {type: RouteParamDataType.RawBody};
+      data = {type: RouteParamDataType.JSON};
       break;
     }
 
