@@ -10,15 +10,28 @@ export enum RouteParamDataType {
   JSON,
   Query,
   URLParam,
+  Request,
+  Response,
 }
 
 export type RouteParam =
+  | {type: RouteParamDataType.Request}
+  | {type: RouteParamDataType.Response}
   | {type: RouteParamDataType.JSON}
   | {type: RouteParamDataType.ParsedBody}
   | {type: RouteParamDataType.AutoBody}
   | {type: RouteParamDataType.RawBody}
-  | {type: RouteParamDataType.Query; key: string; required: boolean}
-  | {type: RouteParamDataType.URLParam; param: string};
+  | {
+      type: RouteParamDataType.Query;
+      key: string;
+      required: boolean;
+      coerce: typeof Number | typeof String;
+    }
+  | {
+      type: RouteParamDataType.URLParam;
+      param: string;
+      coerce: typeof Number | typeof String;
+    };
 
 const setParamMetadata = <T extends Object>(
   target: T,
@@ -86,11 +99,47 @@ export const Body: ParameterDecorator = <T extends Object>(
 /** URL Query Parameter */
 export const Query =
   (key: string, required = false): ParameterDecorator =>
-  (...args) =>
-    setParamMetadata(...args, {type: RouteParamDataType.Query, key, required});
+  (target, prop, index) => {
+    const paramType = Reflect.getMetadata('design:paramtypes', target, prop!)[
+      index
+    ];
+
+    // TODO: custom types like @Body ?
+    if (![String, Number].includes(paramType)) {
+      throw new Error('URL Params can only be of type String or Number');
+    }
+    return setParamMetadata(target, prop, index, {
+      type: RouteParamDataType.Query,
+      key,
+      required,
+      coerce: paramType,
+    });
+  };
 
 /** URL Parameter */
 export const Param =
   (param: string): ParameterDecorator =>
-  (...args) =>
-    setParamMetadata(...args, {type: RouteParamDataType.URLParam, param});
+  (target, prop, index) => {
+    const paramType = Reflect.getMetadata('design:paramtypes', target, prop!)[
+      index
+    ];
+
+    // TODO: custom types like @Body ?
+    if (![String, Number].includes(paramType)) {
+      throw new Error('URL Params can only be of type String or Number');
+    }
+
+    return setParamMetadata(target, prop, index, {
+      type: RouteParamDataType.URLParam,
+      param,
+      coerce: paramType,
+    });
+  };
+
+/** Get the request object */
+export const Request: ParameterDecorator = (...args) =>
+  setParamMetadata(...args, {type: RouteParamDataType.Request});
+
+/** Get the response object */
+export const Response: ParameterDecorator = (...args) =>
+  setParamMetadata(...args, {type: RouteParamDataType.Request});

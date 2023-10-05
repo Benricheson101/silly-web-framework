@@ -8,7 +8,7 @@
     "fmt": "gts fix"
   },
   "dependencies": {
-    "radix3": "^1.1.0",
+    "find-my-way": "^7.6.2",
     "reflect-metadata": "^0.1.13",
     "tsyringe": "^4.8.0",
     "zod": "^3.22.2"

@@ -1,7 +1,11 @@
 import 'reflect-metadata';
 
 import {z} from 'zod';
-import {autoInjectable, container, inject} from 'tsyringe';
+import {
+  autoInjectable as AutoInjectable,
+  container,
+  inject as Inject,
+} from 'tsyringe';
 
 import {
   Get,
@@ -15,16 +19,18 @@ import {
   RouteGroup,
   ZodJSONValidatedBodyParser,
 } from './routing';
-import {startServer} from './server';
+import {createServer} from 'http';
+
+type User = {id: number; name: string; isAdmin: boolean};
 
 class Database {
   #nextID = 0;
-  #users: Map<number, {id: number; name: string}> = new Map();
+  #users: Map<number, User> = new Map();
 
   createUser(data: CreateUserBody) {
     const id = this.#nextID++;
-    this.#users.set(id, {id, name: data.name});
-    return this.#users.get(id);
+    this.#users.set(id, {id, name: data.name, isAdmin: data.isAdmin});
+    return this.#users.get(id)!;
   }
 
   getUser(id: number) {
@@ -45,11 +51,18 @@ class Database {
     this.#users.set(id, {...user, ...(data.toJSON() as {name: string})});
     return this.#users.get(id);
   }
+
+  findUsers({name}: Pick<User, 'name'>) {
+    return [...this.#users.values()].filter(u =>
+      u.name.toLowerCase().includes(name.toLowerCase())
+    );
+  }
 }
 
 class CreateUserBody extends ZodJSONValidatedBodyParser({
   name: z.string(),
   password: z.string(),
+  isAdmin: z.boolean().default(false),
 }) {}
 
 class UpdateUserBody extends ZodJSONValidatedBodyParser(
@@ -61,59 +74,63 @@ class UpdateUserBody extends ZodJSONValidatedBodyParser(
 
 const db = new Database();
 db.createUser(
-  new CreateUserBody(JSON.stringify({name: 'Ben', password: 'password'}))
+  new CreateUserBody(
+    JSON.stringify({name: 'Ben', password: 'password', isAdmin: true})
+  )
 );
 
 container.register(Database, {
   useValue: db,
 });
 
-@autoInjectable()
+@AutoInjectable()
 @RouteGroup('/users')
 class UserRoutes {
-  constructor(@inject(Database) private db: Database) {}
+  constructor(@Inject(Database) private db: Database) {}
 
-  @Get('/:id')
-  // TODO: type coercion for @Param and @Query ?
-  getUser(@Param('id') _id: string) {
-    const id = Number(_id);
+  @Get('/:id(^\\d+$)')
+  getUser(@Param('id') id: number) {
     return this.db.getUser(id);
   }
 
   @Post('/')
-  createUser(@Body userCreds: CreateUserBody) {
+  createUser(@Body userCreds: CreateUserBody): User {
     return this.db.createUser(userCreds);
   }
 
   @Patch('/:id')
-  updateUser(@Body updatedUser: UpdateUserBody, @Param('id') _id: string) {
-    const id = Number(_id);
+  updateUser(@Body updatedUser: UpdateUserBody, @Param('id') id: number) {
     return this.db.updateUser(id, updatedUser);
   }
 
   @Delete('/:id')
-  deleteUser(@Param('id') _id: string) {
-    const id = Number(_id);
+  deleteUser(@Param('id') id: number) {
     this.db.deleteUser(id);
-    return {};
+  }
+
+  @Get('/search')
+  findUsers(@Query('name', true) name: string) {
+    return this.db.findUsers({name});
   }
 }
 
-@autoInjectable()
+@AutoInjectable()
 @RouteGroup('/')
 class AdminRoutes {
-  constructor(@inject(Database) private db: Database) {}
+  constructor(@Inject(Database) private db: Database) {}
 
   @Get('/is-admin')
-  // TODO: required prop in @Query
-  isAdmin(@Query('id') _id: number) {
-    const id = Number(_id);
-    return this.db.getUser(id)?.name === 'Ben';
+  isAdmin(@Query('id', true) id: number) {
+    return this.db.getUser(id)?.isAdmin || false;
   }
 }
 
-const reg = new Router();
-reg.registerRoutes(UserRoutes);
-reg.registerRoutes(AdminRoutes);
+const router = new Router()
+  .registerRoutes(UserRoutes)
+  .registerRoutes(AdminRoutes);
 
-startServer(reg);
+console.log(router.router.prettyPrint());
+
+createServer((req, res) => {
+  router.router.lookup(req, res);
+}).listen(3000);
