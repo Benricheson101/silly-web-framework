@@ -1,11 +1,11 @@
 import assert from 'node:assert';
 import {ConstraintStrategy, HTTPVersion, Handler} from 'find-my-way';
 
-export const requiredQueryParamConstraint: ConstraintStrategy<
+export const requireQueryParamConstraint: ConstraintStrategy<
   HTTPVersion.V1,
   string[]
 > = {
-  name: 'requiredQueryParams',
+  name: 'requireQueryParams',
   mustMatchWhenDerived: false,
 
   storage() {

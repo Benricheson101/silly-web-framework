@@ -18,8 +18,10 @@ import {
   Query,
   RouteGroup,
   ZodJSONValidatedBodyParser,
+  Header,
 } from './routing';
 import {createServer} from 'http';
+import {RequireHeaders} from './routing/constraints';
 
 type User = {id: number; name: string; isAdmin: boolean};
 
@@ -61,7 +63,7 @@ class Database {
 
 class CreateUserBody extends ZodJSONValidatedBodyParser({
   name: z.string(),
-  password: z.string(),
+  password: z.string().min(5),
   isAdmin: z.boolean().default(false),
 }) {}
 
@@ -99,7 +101,12 @@ class UserRoutes {
   }
 
   @Patch('/:id')
-  updateUser(@Body updatedUser: UpdateUserBody, @Param('id') id: number) {
+  updateUser(
+    @Body updatedUser: UpdateUserBody,
+    @Param('id') id: number,
+    @Header('Content-Type') contentType: string
+  ) {
+    console.log('content-type:', contentType);
     return this.db.updateUser(id, updatedUser);
   }
 
@@ -120,6 +127,9 @@ class AdminRoutes {
   constructor(@Inject(Database) private db: Database) {}
 
   @Get('/is-admin')
+  @RequireHeaders({
+    'Content-Type': ['application/json'],
+  })
   isAdmin(@Query('id', true) id: number) {
     return this.db.getUser(id)?.isAdmin || false;
   }

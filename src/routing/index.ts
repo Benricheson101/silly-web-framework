@@ -8,7 +8,11 @@ import {
   RouteParamDataType,
 } from './param';
 import {BodyParser} from './body';
-import {requiredQueryParamConstraint} from './constraints';
+import {
+  requireHeadersConstraint,
+  requireQueryParamConstraint,
+} from './constraints';
+import {ROUTE_CONSTRAINT_METADATA_KEY} from './constraints';
 
 export type Route = {
   method: string;
@@ -27,7 +31,8 @@ export class Router<
     ignoreDuplicateSlashes: true,
 
     constraints: {
-      requiredQueryParams: requiredQueryParamConstraint as any,
+      requireQueryParams: requireQueryParamConstraint as any,
+      requireHeaders: requireHeadersConstraint as any,
     },
   });
 
@@ -58,93 +63,106 @@ export class Router<
           route.fnName
         ) || [];
 
-      const requiredQS = handlerParams
-        .filter(
-          (p): p is Extract<RouteParam, {type: RouteParamDataType.Query}> =>
-            p.type === RouteParamDataType.Query && p.required
-        )
-        .map(p => p.key);
-
-      const qsConstraint = requiredQS.length
-        ? {requiredQueryParams: requiredQS}
-        : {};
+      const constraints =
+        Reflect.getMetadata(
+          ROUTE_CONSTRAINT_METADATA_KEY,
+          routesInstance as Object,
+          route.fnName
+        ) || {};
 
       this.router.on(
         route.method as HTTPMethod,
         group.prefix + route.route,
-        {
-          constraints: {
-            ...qsConstraint,
-          },
-        },
+        {constraints},
         async (req, res, urlParams, _store, searchParams) => {
-          let body: string;
-          if (req.method !== 'GET') {
-            body = await new Promise(resolve => {
-              const chunks: string[] = [];
-              req.on('data', data => chunks.push(data));
-              req.on('end', () => resolve(chunks.join('')));
-            });
-          }
+          try {
+            let body: string;
+            if (req.method !== 'GET') {
+              body = await new Promise(resolve => {
+                const chunks: string[] = [];
+                req.on('data', data => chunks.push(data));
+                req.on('end', () => resolve(chunks.join('')));
+              });
+            }
 
-          const mappedParams = handlerParams.map((param, i) => {
-            switch (param.type) {
-              case RouteParamDataType.JSON: {
-                return body ? JSON.parse(body) : null;
-              }
-
-              case RouteParamDataType.ParsedBody: {
-                const Type: typeof BodyParser = Reflect.getMetadata(
-                  'design:paramtypes',
-                  route.group.prototype,
-                  route.fnName
-                )[i];
-
-                if (!(Type.prototype instanceof BodyParser)) {
-                  throw new TypeError('Type must extend BodyParser');
+            const mappedParams = handlerParams.map((param, i) => {
+              switch (param.type) {
+                case RouteParamDataType.JSON: {
+                  return body ? JSON.parse(body) : null;
                 }
 
-                // @ts-expect-error how do I type `typeof <extended abstract class>`?
-                const parsed: BodyParser = new Type(body);
-                return parsed;
-              }
+                case RouteParamDataType.ParsedBody: {
+                  const Type: typeof BodyParser = Reflect.getMetadata(
+                    'design:paramtypes',
+                    route.group.prototype,
+                    route.fnName
+                  )[i];
 
-              case RouteParamDataType.Query: {
-                return param.coerce(searchParams[param.key]);
-              }
+                  if (!(Type.prototype instanceof BodyParser)) {
+                    throw new TypeError('Type must extend BodyParser');
+                  }
 
-              case RouteParamDataType.URLParam: {
-                return param.coerce(urlParams[param.param]);
-              }
+                  // @ts-expect-error how do I type `typeof <extended abstract class>`?
+                  const parsed: BodyParser = new Type(body);
+                  return parsed;
+                }
 
-              case RouteParamDataType.Request: {
-                return req;
-              }
+                case RouteParamDataType.Query: {
+                  return param.coerce(searchParams[param.key]);
+                }
 
-              case RouteParamDataType.Response: {
-                return res;
+                case RouteParamDataType.URLParam: {
+                  return param.coerce(urlParams[param.param]);
+                }
+
+                case RouteParamDataType.Request: {
+                  return req;
+                }
+
+                case RouteParamDataType.Response: {
+                  return res;
+                }
+
+                case RouteParamDataType.OneHeader: {
+                  return req.headers[param.header.toLowerCase()];
+                }
+
+                case RouteParamDataType.AllHeaders: {
+                  return req.headers;
+                }
+
+                case RouteParamDataType.RawBody: {
+                  return body;
+                }
               }
+            });
+
+            let handlerRes;
+            try {
+              handlerRes = await (routesInstance as {[key: string]: Function})[
+                route.fnName
+              ].apply(routesInstance, mappedParams);
+            } catch (err) {
+              console.error(err);
+              res.writeHead(500).end(JSON.stringify(err, null, 2));
+              return;
             }
-          });
 
-          let handlerRes;
-          try {
-            handlerRes = await (routesInstance as {[key: string]: Function})[
-              route.fnName
-            ].apply(routesInstance, mappedParams);
+            if (!res.headersSent && handlerRes) {
+              res
+                .writeHead(200, {
+                  'Content-Type': 'applicatio/json',
+                })
+                .end(JSON.stringify(handlerRes));
+              return;
+            }
           } catch (err) {
             console.error(err);
-            res.writeHead(500).end(JSON.stringify(err, null, 2));
-            return;
-          }
-
-          if (!res.headersSent && handlerRes) {
             res
-              .writeHead(200, {
+              .writeHead(500, {
                 'Content-Type': 'applicatio/json',
               })
-              .end(JSON.stringify(handlerRes));
-            return;
+              .end(JSON.stringify(err, null, 2));
           }
         }
       );

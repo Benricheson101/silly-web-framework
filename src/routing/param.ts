@@ -1,4 +1,5 @@
 import {BodyParser} from './body';
+import {ROUTE_CONSTRAINT_METADATA_KEY} from './constraints';
 
 export const ROUTE_PARAM_METADATA_KEY = Symbol('route_param');
 export const ROUTE_CLASS_METADATA_KEY = Symbol('route_class');
@@ -6,12 +7,14 @@ export const ROUTE_CLASS_METADATA_KEY = Symbol('route_class');
 export enum RouteParamDataType {
   RawBody,
   ParsedBody,
-  AutoBody,
   JSON,
   Query,
   URLParam,
   Request,
   Response,
+
+  AllHeaders,
+  OneHeader,
 }
 
 export type RouteParam =
@@ -19,12 +22,12 @@ export type RouteParam =
   | {type: RouteParamDataType.Response}
   | {type: RouteParamDataType.JSON}
   | {type: RouteParamDataType.ParsedBody}
-  | {type: RouteParamDataType.AutoBody}
   | {type: RouteParamDataType.RawBody}
+  | {type: RouteParamDataType.AllHeaders}
+  | {type: RouteParamDataType.OneHeader; header: string}
   | {
       type: RouteParamDataType.Query;
       key: string;
-      required: boolean;
       coerce: typeof Number | typeof String;
     }
   | {
@@ -108,10 +111,26 @@ export const Query =
     if (![String, Number].includes(paramType)) {
       throw new Error('URL Params can only be of type String or Number');
     }
+
+    // TODO: set required in a new Symbol(constraints)
+    // TODO: add required headers in there too ^
+
+    if (required) {
+      const md =
+        Reflect.getMetadata(ROUTE_CONSTRAINT_METADATA_KEY, target, prop!) || {};
+
+      if (!('requireQueryParams' in md)) {
+        md.requireQueryParams = [];
+      }
+
+      md.requireQueryParams.push(key);
+
+      Reflect.defineMetadata(ROUTE_CONSTRAINT_METADATA_KEY, md, target, prop!);
+    }
+
     return setParamMetadata(target, prop, index, {
       type: RouteParamDataType.Query,
       key,
-      required,
       coerce: paramType,
     });
   };
@@ -143,3 +162,12 @@ export const Request: ParameterDecorator = (...args) =>
 /** Get the response object */
 export const Response: ParameterDecorator = (...args) =>
   setParamMetadata(...args, {type: RouteParamDataType.Request});
+
+/** Returns all request headers */
+export const Headers: ParameterDecorator = (...args) =>
+  setParamMetadata(...args, {type: RouteParamDataType.AllHeaders});
+
+export const Header =
+  (header: string): ParameterDecorator =>
+  (...args) =>
+    setParamMetadata(...args, {type: RouteParamDataType.OneHeader, header});
